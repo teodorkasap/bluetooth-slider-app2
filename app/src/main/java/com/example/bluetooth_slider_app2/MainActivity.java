@@ -1,13 +1,18 @@
 package com.example.bluetooth_slider_app2;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+//import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -18,10 +23,13 @@ import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity {
 
-    private SeekBar simpleSeekBar;
-    private ListView listView;
-    private Button searchButton;
-    private BluetoothAdapter bluetoothAdapter;
+    SeekBar simpleSeekBar;
+    ListView listView;
+    Button searchButton;
+//    BluetoothManager bluetoothManager;
+    BluetoothAdapter bluetoothAdapter;
+    Context context;
+
 
     private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
@@ -34,6 +42,13 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "Bluetooth aygıtları taraması bitti...",
                         Toast.LENGTH_SHORT).show();
                 searchButton.setEnabled(true);
+            } else if (BluetoothDevice.ACTION_FOUND.equals(action)){
+                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                String name = device.getName();
+                String address = device.getAddress();
+                String rssi = Integer.toString(intent.getShortExtra(BluetoothDevice.EXTRA_RSSI,Short.MIN_VALUE));
+                Log.i("Device Found", "Name: "+ name + " Address: "+address+ " RSSI: "+rssi);
+
             }
         }
     };
@@ -51,7 +66,24 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         simpleSeekBar = findViewById(R.id.seekBar);
         searchButton = findViewById(R.id.searchButton);
+
+
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 2);
+        }
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
+        if (bluetoothAdapter == null) {
+
+            Toast.makeText(MainActivity.this, "Device does not support Bluetooth",
+                    Toast.LENGTH_SHORT).show();
+        } else if (bluetoothAdapter != null && !bluetoothAdapter.isEnabled()) {
+
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, 1);
+        }
+//        BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
+//        BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
 
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
