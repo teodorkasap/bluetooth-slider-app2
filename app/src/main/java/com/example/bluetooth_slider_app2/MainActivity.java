@@ -16,46 +16,64 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.SeekBar;
 import android.widget.Toast;
+
+import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
 
     SeekBar simpleSeekBar;
     ListView listView;
     Button searchButton;
-//    BluetoothManager bluetoothManager;
+    //    BluetoothManager bluetoothManager;
     BluetoothAdapter bluetoothAdapter;
     Context context;
+    ArrayList<String> bluetoothDevices = new ArrayList<>();
+    ArrayList<String> addresses = new ArrayList<>();
+    ArrayAdapter arrayAdapter;
 
 
     private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            Log.i("Action",action);
+            Log.i("Action", action);
 
             if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
 
                 Toast.makeText(MainActivity.this, "Bluetooth aygıtları taraması bitti...",
                         Toast.LENGTH_SHORT).show();
                 searchButton.setEnabled(true);
-            } else if (BluetoothDevice.ACTION_FOUND.equals(action)){
+            } else if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                 BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 String name = device.getName();
                 String address = device.getAddress();
-                String rssi = Integer.toString(intent.getShortExtra(BluetoothDevice.EXTRA_RSSI,Short.MIN_VALUE));
-                Log.i("Device Found", "Name: "+ name + " Address: "+address+ " RSSI: "+rssi);
-
+                String rssi = Integer.toString(intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE));
+                Log.i("Device Found", "Name: " + name + " Address: " + address + " RSSI: " + rssi);
+                if (!addresses.contains(address)) {
+                    addresses.add(address);
+                    String deviceString = "";
+                    if (name == null || name.equals("")) {
+                        deviceString = address + " - RSSI " + rssi + "dbm";
+                    } else {
+                        deviceString = name + " - RSSI " + rssi + "dbm";
+                    }
+                    bluetoothDevices.add(deviceString);
+                    arrayAdapter.notifyDataSetChanged();
+                }
             }
         }
     };
 
-    public void searchButtonClick(View view){
+    public void searchButtonClick(View view) {
         Toast.makeText(MainActivity.this, "Bluetooth aygıtları taranıyor...",
                 Toast.LENGTH_SHORT).show();
+        bluetoothDevices.clear();
+        addresses.clear();
         searchButton.setEnabled(false);
         bluetoothAdapter.startDiscovery();
     }
@@ -66,6 +84,10 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         simpleSeekBar = findViewById(R.id.seekBar);
         searchButton = findViewById(R.id.searchButton);
+        listView = findViewById(R.id.listView);
+
+        arrayAdapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, bluetoothDevices);
+        listView.setAdapter(arrayAdapter);
 
 
         if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -90,8 +112,7 @@ public class MainActivity extends AppCompatActivity {
         intentFilter.addAction(BluetoothDevice.ACTION_FOUND);
         intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
         intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
-        registerReceiver(broadcastReceiver,intentFilter);
-
+        registerReceiver(broadcastReceiver, intentFilter);
 
 
         simpleSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
