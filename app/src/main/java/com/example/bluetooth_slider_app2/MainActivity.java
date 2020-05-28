@@ -14,6 +14,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -23,6 +24,7 @@ import android.widget.SeekBar;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -35,6 +37,33 @@ public class MainActivity extends AppCompatActivity {
     ArrayList<String> bluetoothDevices = new ArrayList<>();
     ArrayList<String> addresses = new ArrayList<>();
     ArrayAdapter arrayAdapter;
+
+    // Debugging
+    private static final String TAG = "BluetoothChat";
+    private static final boolean D = true;
+    // Message types sent from the BluetoothChatService Handler
+    public static final int MESSAGE_STATE_CHANGE = 1;
+    public static final int MESSAGE_READ = 2;
+    public static final int MESSAGE_WRITE = 3;
+    public static final int MESSAGE_DEVICE_NAME = 4;
+    public static final int MESSAGE_TOAST = 5;
+    // Key names received from the BluetoothChatService Handler
+    public static final String DEVICE_NAME = "device_name";
+    public static final String TOAST = "toast";
+    // Intent request codes
+    private static final int REQUEST_CONNECT_DEVICE = 1;
+    private static final int REQUEST_ENABLE_BT = 2;
+    // Name of the connected device
+    private String mConnectedDeviceName = null;
+    // Array adapter for the conversation thread
+    private ArrayAdapter<String> mConversationArrayAdapter;
+    // String buffer for outgoing messages
+    private StringBuffer mOutStringBuffer;
+    // Local Bluetooth adapter
+    private BluetoothAdapter mBluetoothAdapter = null;
+    // Member object for the chat services
+    private BluetoothChatService mChatService = null;
+
 
 
     private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
