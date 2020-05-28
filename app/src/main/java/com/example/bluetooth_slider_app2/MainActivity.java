@@ -5,9 +5,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-//import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -15,8 +15,10 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
@@ -24,19 +26,24 @@ import android.widget.SeekBar;
 import android.widget.Toast;
 
 import java.util.ArrayList;
-import java.util.UUID;
+import java.util.Arrays;
+import java.util.regex.Pattern;
+import java.util.Scanner;
+import java.util.regex.Matcher;
 
 public class MainActivity extends AppCompatActivity {
 
-    SeekBar simpleSeekBar;
-    ListView listView;
-    Button searchButton;
+    private SeekBar simpleSeekBar;
+    private ListView listView;
+    private Button searchButton;
     //    BluetoothManager bluetoothManager;
-    BluetoothAdapter bluetoothAdapter;
-    Context context;
-    ArrayList<String> bluetoothDevices = new ArrayList<>();
-    ArrayList<String> addresses = new ArrayList<>();
-    ArrayAdapter arrayAdapter;
+    private BluetoothAdapter bluetoothAdapter;
+    private Context context;
+    private ArrayList<String> bluetoothDevices = new ArrayList<>();
+    private ArrayList<BluetoothDevice> bluetoothDeviceObjects = new ArrayList<>();
+    private ArrayList<String> addresses = new ArrayList<>();
+    private ArrayAdapter arrayAdapter;
+    private String valString;
 
     // Debugging
     private static final String TAG = "BluetoothChat";
@@ -85,6 +92,7 @@ public class MainActivity extends AppCompatActivity {
                 Log.i("Device Found", "Name: " + name + " Address: " + address + " RSSI: " + rssi);
                 if (!addresses.contains(address)) {
                     addresses.add(address);
+                    bluetoothDeviceObjects.add(device);
                     String deviceString = "";
                     if (name == null || name.equals("")) {
                         deviceString = address + " - RSSI " + rssi + "dbm";
@@ -108,16 +116,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        simpleSeekBar = findViewById(R.id.seekBar);
-        searchButton = findViewById(R.id.searchButton);
-        listView = findViewById(R.id.listView);
-
-        arrayAdapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, bluetoothDevices);
-        listView.setAdapter(arrayAdapter);
-
+    public void onStart() {
+        super.onStart();
+        if(D) Log.e(TAG, "++ ON START ++");
 
         if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 2);
@@ -132,9 +133,118 @@ public class MainActivity extends AppCompatActivity {
 
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(enableBtIntent, 1);
+            if (mChatService == null) setupChat();
         }
-//        BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
-//        BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+
+    }
+
+//    @Override
+//    public synchronized void onResume() {
+//        super.onResume();
+//        if(D) Log.e(TAG, "+ ON RESUME +");
+//        // Performing this check in onResume() covers the case in which BT was
+//        // not enabled during onStart(), so we were paused to enable it...
+//        // onResume() will be called when ACTION_REQUEST_ENABLE activity returns.
+//        if (mChatService != null) {
+//            // Only if the state is STATE_NONE, do we know that we haven't started already
+//            if (mChatService.getState() == BluetoothChatService.STATE_NONE) {
+//                // Start the Bluetooth chat services
+//                mChatService.start();
+//            }
+//        }
+//    }
+
+    private void setupChat() {
+        Log.d(TAG, "setupChat()");
+        // Initialize the send button with a listener that for click events
+
+        // Initialize the BluetoothChatService to perform bluetooth connections
+        mChatService = new BluetoothChatService(this, mHandler);
+        // Initialize the buffer for outgoing messages
+        mOutStringBuffer = new StringBuffer("");
+    }
+
+    // The Handler that gets information back from the BluetoothChatService
+    @SuppressLint("HandlerLeak")
+    private final Handler mHandler = new Handler() {
+
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case MESSAGE_STATE_CHANGE:
+                    if(D) Log.i(TAG, "MESSAGE_STATE_CHANGE: " + msg.arg1);
+                    switch (msg.arg1) {
+                        case BluetoothChatService.STATE_CONNECTED:
+                            Toast.makeText(MainActivity.this, "Connected to :" + mConnectedDeviceName,
+                                    Toast.LENGTH_SHORT).show();
+                            mConversationArrayAdapter.clear();
+                            break;
+                        case BluetoothChatService.STATE_CONNECTING:
+                            Toast.makeText(MainActivity.this, "Connecting :",
+                                    Toast.LENGTH_SHORT).show();
+                            break;
+                        case BluetoothChatService.STATE_LISTEN:
+                        case BluetoothChatService.STATE_NONE:
+                            Toast.makeText(MainActivity.this, "Connected to :" + mConnectedDeviceName,
+                                    Toast.LENGTH_SHORT).show();
+                            break;
+                    }
+                    break;
+                case MESSAGE_WRITE:
+                    byte[] writeBuf = (byte[]) msg.obj;
+                    // construct a string from the buffer
+                    String writeMessage = new String(writeBuf);
+                    mConversationArrayAdapter.add("Me:  " + writeMessage);
+                    break;
+                case MESSAGE_READ:
+                    byte[] readBuf = (byte[]) msg.obj;
+                    // construct a string from the valid bytes in the buffer
+                    String readMessage = new String(readBuf, 0, msg.arg1);
+                    mConversationArrayAdapter.add(mConnectedDeviceName+":  " + readMessage);
+                    break;
+                case MESSAGE_DEVICE_NAME:
+                    // save the connected device's name
+                    mConnectedDeviceName = msg.getData().getString(DEVICE_NAME);
+                    Toast.makeText(getApplicationContext(), "Connected to "
+                            + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
+                    break;
+                case MESSAGE_TOAST:
+                    Toast.makeText(getApplicationContext(), msg.getData().getString(TOAST),
+                            Toast.LENGTH_SHORT).show();
+                    break;
+            }
+        }
+    };
+
+    private void sendMessage(String message) {
+        // Check that we're actually connected before trying anything
+        if (mChatService.getState() != BluetoothChatService.STATE_CONNECTED) {
+            Toast.makeText(this, "Not Connected...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // Check that there's actually something to send
+        if (message.length() > 0) {
+            // Get the message bytes and tell the BluetoothChatService to write
+            byte[] send = message.getBytes();
+            mChatService.write(send);
+            // Reset out string buffer to zero and clear the edit text field
+            mOutStringBuffer.setLength(0);
+//            mOutEditText.setText(mOutStringBuffer);
+        }
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        simpleSeekBar = findViewById(R.id.seekBar);
+        searchButton = findViewById(R.id.searchButton);
+        listView = findViewById(R.id.listView);
+
+        arrayAdapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, bluetoothDevices);
+        listView.setAdapter(arrayAdapter);
+
+
+
 
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
@@ -143,6 +253,40 @@ public class MainActivity extends AppCompatActivity {
         intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
         registerReceiver(broadcastReceiver, intentFilter);
 
+
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+                String selectedFromList = parent.getItemAtPosition(position).toString();
+                Log.i("Item selected", "Device to be connected to: "+selectedFromList);
+
+                String[] tokenizedString = selectedFromList.trim().split(" ");
+
+                Log.i("Item selected", "Tokenized String: "+ Arrays.toString(tokenizedString));
+
+                int index = 0;
+                for(int i = 0; i < tokenizedString.length; i++){
+                    if(tokenizedString[i].equals(" RSSI")) {
+                        System.out.println("found at index "+i);
+                        index=i;
+                        break;
+                    }
+
+                }
+                String macAddress = tokenizedString[index-2];
+                Log.i("MAC Address", "Mac Address Found: "+macAddress);
+
+
+//                for(BluetoothDevice device : bluetoothDeviceObjects)
+//                {
+//                    if(device.getAddress() == ){
+//                        mChatService.connect(device);
+//                    };
+//                }
+
+            }
+        });
 
         simpleSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             int progressChangedValue = 0;
@@ -164,7 +308,8 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "Seek bar progress is :" + progressChangedValue,
                         Toast.LENGTH_SHORT).show();
 
-//                valString = String.format("%d\n", progressChangedValue);
+                valString = String.format("%d\n", progressChangedValue);
+                sendMessage(valString);
 //                byte[] valBytes = val.getBytes();
 
             }
