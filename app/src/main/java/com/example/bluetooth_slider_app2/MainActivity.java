@@ -95,9 +95,9 @@ public class MainActivity extends AppCompatActivity {
                     bluetoothDeviceObjects.add(device);
                     String deviceString = "";
                     if (name == null || name.equals("")) {
-                        deviceString = address + " - RSSI " + rssi + "dbm";
+                        deviceString = address + " " + rssi + "dbm";
                     } else {
-                        deviceString = name + " - RSSI " + rssi + "dbm";
+                        deviceString =address+" "+ name + " " + rssi + "dbm";
                     }
                     bluetoothDevices.add(deviceString);
                     arrayAdapter.notifyDataSetChanged();
@@ -264,26 +264,16 @@ public class MainActivity extends AppCompatActivity {
                 String[] tokenizedString = selectedFromList.trim().split(" ");
 
                 Log.i("Item selected", "Tokenized String: "+ Arrays.toString(tokenizedString));
-
-                int index = 0;
-                for(int i = 0; i < tokenizedString.length; i++){
-                    if(tokenizedString[i].equals(" RSSI")) {
-                        System.out.println("found at index "+i);
-                        index=i;
-                        break;
-                    }
-
-                }
-                String macAddress = tokenizedString[index-2];
+                String macAddress = tokenizedString[0];
                 Log.i("MAC Address", "Mac Address Found: "+macAddress);
 
 
-//                for(BluetoothDevice device : bluetoothDeviceObjects)
-//                {
-//                    if(device.getAddress() == ){
-//                        mChatService.connect(device);
-//                    };
-//                }
+                for(BluetoothDevice device : bluetoothDeviceObjects)
+                {
+                    if(device.getAddress() == macAddress){
+                        mChatService.connect(device);
+                    };
+                }
 
             }
         });
