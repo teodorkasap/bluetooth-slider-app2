@@ -15,6 +15,7 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.view.View;
@@ -72,7 +73,6 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothChatService mChatService = null;
 
 
-
     private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -97,7 +97,7 @@ public class MainActivity extends AppCompatActivity {
                     if (name == null || name.equals("")) {
                         deviceString = address + " " + rssi + "dbm";
                     } else {
-                        deviceString =address+" "+ name + " " + rssi + "dbm";
+                        deviceString = address + " " + name + " " + rssi + "dbm";
                     }
                     bluetoothDevices.add(deviceString);
                     arrayAdapter.notifyDataSetChanged();
@@ -118,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onStart() {
         super.onStart();
-        if(D) Log.e(TAG, "++ ON START ++");
+        if (D) Log.e(TAG, "++ ON START ++");
 
         if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 2);
@@ -154,24 +154,15 @@ public class MainActivity extends AppCompatActivity {
 //        }
 //    }
 
-    private void setupChat() {
-        Log.d(TAG, "setupChat()");
-        // Initialize the send button with a listener that for click events
-
-        // Initialize the BluetoothChatService to perform bluetooth connections
-        mChatService = new BluetoothChatService(this, mHandler);
-        // Initialize the buffer for outgoing messages
-        mOutStringBuffer = new StringBuffer("");
-    }
 
     // The Handler that gets information back from the BluetoothChatService
     @SuppressLint("HandlerLeak")
-    private final Handler mHandler = new Handler() {
+    private final Handler mHandler = new Handler(Looper.getMainLooper()) {
 
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case MESSAGE_STATE_CHANGE:
-                    if(D) Log.i(TAG, "MESSAGE_STATE_CHANGE: " + msg.arg1);
+                    if (D) Log.i(TAG, "MESSAGE_STATE_CHANGE: " + msg.arg1);
                     switch (msg.arg1) {
                         case BluetoothChatService.STATE_CONNECTED:
                             Toast.makeText(MainActivity.this, "Connected to :" + mConnectedDeviceName,
@@ -199,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
                     byte[] readBuf = (byte[]) msg.obj;
                     // construct a string from the valid bytes in the buffer
                     String readMessage = new String(readBuf, 0, msg.arg1);
-                    mConversationArrayAdapter.add(mConnectedDeviceName+":  " + readMessage);
+                    mConversationArrayAdapter.add(mConnectedDeviceName + ":  " + readMessage);
                     break;
                 case MESSAGE_DEVICE_NAME:
                     // save the connected device's name
@@ -214,6 +205,16 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     };
+
+    private void setupChat() {
+        Log.d(TAG, "setupChat()");
+        // Initialize the send button with a listener that for click events
+
+        // Initialize the BluetoothChatService to perform bluetooth connections
+        mChatService = new BluetoothChatService(this, mHandler);
+        // Initialize the buffer for outgoing messages
+        mOutStringBuffer = new StringBuffer("");
+    }
 
     private void sendMessage(String message) {
         // Check that we're actually connected before trying anything
@@ -244,8 +245,6 @@ public class MainActivity extends AppCompatActivity {
         listView.setAdapter(arrayAdapter);
 
 
-
-
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
         intentFilter.addAction(BluetoothDevice.ACTION_FOUND);
@@ -259,22 +258,29 @@ public class MainActivity extends AppCompatActivity {
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 
                 String selectedFromList = parent.getItemAtPosition(position).toString();
-                Log.i("Item selected", "Device to be connected to: "+selectedFromList);
+                Log.i("Item selected", "Device to be connected to: " + selectedFromList);
 
                 String[] tokenizedString = selectedFromList.trim().split(" ");
 
-                Log.i("Item selected", "Tokenized String: "+ Arrays.toString(tokenizedString));
+                Log.i("Item selected", "Tokenized String: " + Arrays.toString(tokenizedString));
                 String macAddress = tokenizedString[0];
-                Log.i("MAC Address", "Mac Address Found: "+macAddress);
+                Log.i("MAC Address", "Mac Address Found: " + macAddress);
 
 
-                for(BluetoothDevice device : bluetoothDeviceObjects)
-                {
-                    if(device.getAddress() == macAddress){
-                        mChatService.connect(device);
-                    };
+                for (BluetoothDevice device : bluetoothDeviceObjects) {
+                    Log.i("Member", "Device address: " + device.getAddress().toString());
+                    if (device.getAddress().equals(macAddress)) {
+                        System.out.println("Connecting to selected device..." + device.getAddress());
+                        if (mChatService != null) {
+                            mChatService.connect(device);
+                            break;
+                        } else {
+                            setupChat();
+                            mChatService.connect(device);
+                            break;
+                        }
+                    }
                 }
-
             }
         });
 

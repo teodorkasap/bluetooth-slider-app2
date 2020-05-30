@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothSocket;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 
@@ -82,6 +83,7 @@ public class BluetoothChatService {
      * @param device  The BluetoothDevice to connect
      */
     public synchronized void connect(BluetoothDevice device) {
+
         if (D) Log.d(TAG, "connect to: " + device);
         // Cancel any thread attempting to make a connection
         if (mState == STATE_CONNECTING) {
@@ -154,7 +156,8 @@ public class BluetoothChatService {
         Bundle bundle = new Bundle();
         bundle.putString(MainActivity.TOAST, "Unable to connect device");
         msg.setData(bundle);
-        mHandler.sendMessage(msg);
+        Looper.prepare();
+        mHandler.handleMessage(msg);
     }
     /**
      * Indicate that the connection was lost and notify the UI Activity.
@@ -262,8 +265,10 @@ public class BluetoothChatService {
             try {
                 // This is a blocking call and will only return on a
                 // successful connection or an exception
+                System.out.println("Trying to connect...");
                 mmSocket.connect();
             } catch (IOException e) {
+                System.out.println("Connection has failed...");
                 connectionFailed();
                 // Close the socket
                 try {
